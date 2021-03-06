@@ -7,6 +7,7 @@ Parameters:
     Description: "Name for VPC that is being created"
     Type: String
     Default: "thebitbyteboxVPC"
+    
   Region:
     Description: "Region where VPC needs to be created"
     Type: String
@@ -19,7 +20,12 @@ Parameters:
     Type: String
     Default: "thebitbytebox"
 
-    
+  VPCFLowLogRetentionDays:
+    Description: "How many days VPC Flow Logs should be retained?"
+    Type: Number
+    Default: 90
+    MinValue: 30 
+    ConstraintDescription: "Minimum log retention days is 30. If you leave it blank, logs will be retianed for 90 days."
 
 Mappings:
   SubnetConfiguration:
@@ -60,6 +66,48 @@ Resources:
           Key: "Name"
           Value: !Ref "VPCName"
   
+  MyVPCLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: !Ref VPCFLowLogRetentionDays
+
+  MyVPCFlowLogRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "vpc-flow-logs.amazonaws.com"
+              Action:
+                - "sts-AssumeRole"
+      Policies:
+      - PolicyName: !Join 
+          - ""
+          - - !Ref "VPCName"
+            - "-flow-log-policy"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: "Allow"
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+              - "logs:DescribeLogGroups"
+              - "logs:DescribeLogStreams"
+            Resource: !GetAtt "MyVPCLogGroup.Arn"
+  
+  
+  MyVPCFlowLogs:
+    Type: "AWS::EC2::FlowLog"
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt "MyVPCFlowLogRole.Arn"
+      LogGroupName: !Ref "MyVPCLogGroup"
+      ResourceId: !Ref "VPC"
+      TrafficType: "ALL"
   
   PublicSubnet1:
     Type: "AWS::EC2::Subnet"
