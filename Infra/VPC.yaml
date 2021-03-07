@@ -27,6 +27,16 @@ Parameters:
     MinValue: 30 
     ConstraintDescription: "Minimum log retention days is 30. If you leave it blank, logs will be retianed for 90 days."
 
+    Environment:
+      Description: "Which environment the VPC is created for."
+      Type: String
+      Default: "Development"
+      ConstraintDescription: "Environment can be [Development, QA, Production]"
+      AllowedValues:
+        - "Development"
+        - "QA"
+        - "Production"
+
 Mappings:
   SubnetConfiguration:
     VPC:
@@ -46,7 +56,18 @@ Mappings:
       AZs: ["a", "b"]
 
 
+Conditions:
+  IsProduction: !Equals
+    - !Ref "Environment"
+    - "Production"
+  
+  IsQA: !Equals
+    - !Ref "Environment"
+    - "QA"
 
+  IsMultiZone: !Or
+    - !Condition "IsProduction"
+    - !Condition "IsQA"
 
 Resources:
   VPC:
@@ -65,11 +86,20 @@ Resources:
         - 
           Key: "Name"
           Value: !Ref "VPCName"
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
   
   MyVPCLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: !Ref VPCFLowLogRetentionDays
+      LogGroupName: !Join
+        - ""
+        - - !Ref "VPCName"
+          - "-flowlog-group-"
+          - !Ref "Environment"
+          
 
   MyVPCFlowLogRole:
     Type: "AWS::IAM::Role"
@@ -99,7 +129,22 @@ Resources:
               - "logs:DescribeLogGroups"
               - "logs:DescribeLogStreams"
             Resource: !GetAtt "MyVPCLogGroup.Arn"
-  
+      Tags:
+        - 
+          Key: "Owner"
+          Value: !Ref Owner
+        - 
+          Key: "Application"
+          Value: !Ref "AWS::StackName"
+        - 
+          Key: "Name"
+          Value: !Join
+            - ""
+            - - !Ref "VPCName"
+              - "-flowlog-role"
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
   
   MyVPCFlowLogs:
     Type: "AWS::EC2::FlowLog"
@@ -135,11 +180,14 @@ Resources:
             - - !Ref "VPCName"
               - "-public-"
               - !Select [0, !FindInMap ["AZRegions", !Ref "Region", "AZs"]]
-  
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
   
 
   PublicSubnet2:
     Type: "AWS::EC2::Subnet"
+    Condition: "IsMultiZone"
     Properties:
       VpcId: !Ref "VPC"
       AvailabilityZone: !Join
@@ -162,7 +210,9 @@ Resources:
             - - !Ref "VPCName"
               - "-public-"
               - !Select [1, !FindInMap ["AZRegions", !Ref "Region", "AZs"]]
-  
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
   
   PrivateSubnet1:
     Type: "AWS::EC2::Subnet"
@@ -187,10 +237,13 @@ Resources:
             - - !Ref "VPCName"
               - "-private-"
               - !Select [0, !FindInMap [ "AZRegions", !Ref "Region", "AZs"] ]
-  
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
   
   PrivateSubnet2:
     Type: "AWS::EC2::Subnet"
+    Condition: "IsMultiZone"
     Properties:
       VpcId: !Ref "VPC"
       AvailabilityZone: !Join
@@ -212,7 +265,9 @@ Resources:
             - - !Ref "VPCName"
               - "-private-"
               - !Select [1, !FindInMap [ "AZRegions", !Ref "Region", "AZs"] ]
-
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
       
   MyInternetGateway:
     Type: "AWS::EC2::InternetGateway"
@@ -230,7 +285,9 @@ Resources:
             - ""
             - - !Ref VPCName
               - "-IGW"
-  
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
   
   MyInternetGatewayAttachment:
     Type: "AWS::EC2::VPCGatewayAttachment"
@@ -255,7 +312,11 @@ Resources:
             - ""
             - - !Ref "VPCName"
               - "-public-route-table"
-  
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
+
+
   PublicRoute:
     Type: "AWS::EC2::Route"
     DependsOn: "MyInternetGatewayAttachment"
@@ -272,6 +333,7 @@ Resources:
 
   PublicRouteSubnetAssoForSubnet2:
     Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Condition: "IsMultiZone"
     Properties:
       SubnetId: !Ref "PublicSubnet2"
       RouteTableId: !Ref "PublicRouteTable"
@@ -295,7 +357,10 @@ Resources:
             - ""
             - - !Ref "VPCName"
               - "-public-nacl"
-  
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
+
 
   InboundPublicNetworkACLEntryHttp:
     Type: "AWS::EC2::NetworkAclEntry"
@@ -375,6 +440,7 @@ Resources:
 
   PublicSubnetNetworkAclAssociation2:
     Type: "AWS::EC2::SubnetNetworkAclAssociation"
+    Condition: "IsMultiZone"
     Properties:
       SubnetId: !Ref "PublicSubnet2"
       NetworkAclId: !Ref "PublicNetworkAcl"
@@ -393,11 +459,13 @@ Resources:
 
   ElasticIP2:
     Type: "AWS::EC2::EIP"
+    Condition: "IsMultiZone"
     Properties:
       Domain: "vpc"
 
   NATGateway2:
     Type: "AWS::EC2::NatGateway"
+    Condition: "IsMultiZone"
     Properties: 
       AllocationId: !GetAtt "ElasticIP2.AllocationId"
       SubnetId: !Ref "PublicSubnet2"
@@ -420,6 +488,9 @@ Resources:
             - ""
             - - !Ref "VPCName"
               - "-private-route-table-1"
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
 
   PrivateRouteToInternet1:
     Type: "AWS::EC2::Route"
@@ -431,6 +502,7 @@ Resources:
 
   PrivateRouteTable2:
     Type: "AWS::EC2::Route"
+    Condition: "IsMultiZone"
     Properties:
       VpcId: !Ref "VPC"
       Tags:
@@ -446,10 +518,13 @@ Resources:
             - ""
             - - !Ref "VPCName"
               - "-private-route-table-2"
-
+        - 
+          Key: "Environment"
+          Value: !Ref "Environment"
 
   PrivateRouteToInternet2:
     Type: "AWS::EC2::Route"
+    Condition: "IsMultiZone"
     Properties:
       RouteTableId:
         Ref: "PrivateRouteTable2"
@@ -467,6 +542,7 @@ Resources:
 
   PrivateSubnetRouteTableAsso2:
     Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Condition: "IsMultiZone"
     Properties:
       SubnetId: !Ref "PrivateSubnet2"
       RouteTableId: !Ref "PrivateRouteTable2"
@@ -476,11 +552,7 @@ Outputs:
   VPCId:
     Description: "VPCId"
     Value: !Ref "VPC"
-    Export:
-      Name: !Join
-        - ""
-        - - !Ref "Region"
-          - !Sub "-${AWS::StackName}-VPC"
+  
   
   PublicSubnet1:
     Description: "Public Subnet 1"
@@ -493,27 +565,39 @@ Outputs:
 
   PublicSubnet2:
     Description: "Public Subnet 2"
+    Condition: "IsMultiZone"
     Value: !Ref "PublicSubnet2"
-    Export:
-      Name: !Join
-        - ""
-        - - !Ref "Region"
-          - !Sub "-${AWS::StackName}-PublicSubnet2"
 
   PrivateSubnet1:
     Description: "Private Subnet 1"
     Value: !Ref "PrivateSubnet1"
-    Export:
-      Name: !Join
-        - ""
-        - - !Ref "Region"
-          - !Sub "-${AWS::StackName}-PrivateSubnet1"
 
   PrivateSubnet2:
     Description: "Private Subnet 2"
+    Condition: "IsMultiZone"
     Value: !Ref "PrivateSubnet2"
     Export:
       Name: !Join
         - ""
         - - !Ref "Region"
           - !Sub "-${AWS::StackName}-PrivateSubnet2"
+
+  PublicSubnets:
+    Description: "List of public subnets"
+    Value: !Join 
+      - ","
+      - - !Ref PublicSubnet1
+        - !If 
+          - "IsMultiZone"
+          - - !Ref PublicSubnet2
+            - "AWS::NoValue"
+
+  PrivateSubnets:
+    Description: "List of private subnets"
+    Value: !Join 
+      - ","
+      - - !Ref PrivateSubnet1
+        - !If
+          - "IsMultiZone"
+          - - !Ref PrivateSubnet2
+            - "AWS::NoValue"

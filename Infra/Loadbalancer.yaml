@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Created ALBs in both public subnets together with autoscaling groups of webservers with cross zone loadbalancing enabled.
+
+Parameters:
+    Environment:
+        Description: "Environment for the Loadbalancer"
+        Type: String
+    VPC:
+        Type: AWS::EC2::VPC::Id
+        Description: VPC to which we deploy the load balancer"
+    Subnets:
+        Description: "Subnets to which the loadbalancer should be deployed"
+        Type: List<AWS::EC2::Subnet::Id>
+    Owner:
+        Description: "Owner of LBs"
+        Type: String
+        Default: "thebitbytebox"
+
+Resources:
+    MyALoadBalancer:
+        Type:  "AWS::ElasticLoadBalancingV2::LoadBalancer"
+        Properties:
+            Name: !Join
+                - ""
+                - - !Ref "AWS::StackName"
+                  - "-"
+                  - !Ref "Environment"
+                  - "-lb"
+            Scheme: "internet-facing"
+            SecurityGroups:
+                - !Ref "MyALBSecurityGroup"
+            Subnets: !Ref "Subnets"
+            Tags:
+                - 
+                    Key: "Owner"
+                    Value: !Ref Owner
+                - 
+                    Key: "Application"
+                    Value: !Ref "AWS::StackName"
+                - 
+                    Key: "Environment"
+                    Value: !Ref "Environment"
+                -
+                    Key: "Name"
+                    Value: !Join
+                        - ""
+                        - - !Ref "AWS::StackName"
+                          - "-"
+                          - !Ref "Environment"
+                          - "-lb"
+
+    MyALBSecurityGroup:
+        Type: "AWS::EC2::SecurityGroup"
+        Properties:
+            VpcId: !Ref "VPC"
+            GroupDescription: "Security group for my Elastic LoadBalancer.Only allows connection on http and https from anywhere"
+            SecurityGroupIngress:
+                - FromPort: 80
+                  ToPort: 80
+                  CidrIp: "0.0.0.0/0"
+                  IpProtocol: "tcp"
+                  Description: "Allows http connection."  
+                - FromPort: 443
+                  ToPort: 443
+                  CidrIp: "0.0.0.0/0"
+                  IpProtocol: "tcp"
+                  Description: "Allows https connection."
+            Tags:
+                - 
+                    Key: "Owner"
+                    Value: !Ref Owner
+                - 
+                    Key: "Application"
+                    Value: !Ref "AWS::StackName"
+                - 
+                    Key: "Environment"
+                    Value: !Ref "Environment"
+                -
+                    Key: "Name"
+                    Value: !Join
+                        - ""
+                        - - !Ref "AWS::StackName"
+                          - "-" 
+                          - !Ref "Environment"
+                          - "-default-tg"
+
+    MyALBHttpListener:
+        Type: "AWS::ElasticLoadBalancingV2::Listener"
+        Properties:
+            LoadBalancerArn: !Ref "MyALoadBalancer"
+            Port: 80
+            Protocol: "HTTP"
+            DefaultActions:
+                - Type: "forward"
+                - TargetGroupArn: !Ref DefaultTargetGroup
+    
+    DefaultTargetGroup:
+        Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+        Properties:
+            Name: !Join
+                - ""
+                - - !Ref "AWS::StackName"
+                  - "-"
+                  - !GetAtt "MyALoadBalancer.LoadBalancerName"
+                  - "-default-tg"
+            Protocol: "HTTP"
+            Port: 80
+            Tags:
+                - 
+                    Key: "Owner"
+                    Value: !Ref Owner
+                - 
+                    Key: "Application"
+                    Value: !Ref "AWS::StackName"
+                - 
+                    Key: "Environment"
+                    Value: !Ref "Environment"
+                -
+                    Key: "Name"
+                    Value: !Join
+                        - ""
+                        - - !Ref "AWS::StackName"
+                          - "-"
+                          - !GetAtt "MyALoadBalancer.LoadBalancerName"
+                          - "-default-tg"
+
+
+Outputs:
+    MyALoadBalancer:
+        Description: "My application load balancer"
+        Value: !Ref "MyALoadBalancer"
+    
+    MyALBHttpListerner:
+        Description: "My application loadbalancer http listener"
+        Value: !Ref "MyALBHttpListener"
