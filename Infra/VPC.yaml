@@ -27,15 +27,15 @@ Parameters:
     MinValue: 30 
     ConstraintDescription: "Minimum log retention days is 30. If you leave it blank, logs will be retianed for 90 days."
 
-    Environment:
-      Description: "Which environment the VPC is created for."
-      Type: String
-      Default: "Development"
-      ConstraintDescription: "Environment can be [Development, QA, Production]"
-      AllowedValues:
-        - "Development"
-        - "QA"
-        - "Production"
+  Environment:
+    Description: "Which environment the VPC is created for."
+    Type: String
+    Default: "Development"
+    ConstraintDescription: "Environment can be [Development, QA, Production]"
+    AllowedValues:
+      - "Development"
+      - "QA"
+      - "Production"
 
 Mappings:
   SubnetConfiguration:
@@ -589,8 +589,8 @@ Outputs:
       - - !Ref PublicSubnet1
         - !If 
           - "IsMultiZone"
-          - - !Ref PublicSubnet2
-            - "AWS::NoValue"
+          - !Ref PublicSubnet2
+          - "AWS::NoValue"
 
   PrivateSubnets:
     Description: "List of private subnets"
@@ -599,5 +599,5 @@ Outputs:
       - - !Ref PrivateSubnet1
         - !If
           - "IsMultiZone"
-          - - !Ref PrivateSubnet2
-            - "AWS::NoValue"
+          - !Ref PrivateSubnet2
+          - "AWS::NoValue"
