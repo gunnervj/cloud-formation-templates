@@ -111,24 +111,25 @@ Resources:
             Principal:
               Service:
                 - "vpc-flow-logs.amazonaws.com"
-              Action:
-                - "sts-AssumeRole"
-      Policies:
-      - PolicyName: !Join 
-          - ""
-          - - !Ref "VPCName"
-            - "-flow-log-policy"
-        PolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-          - Effect: "Allow"
             Action:
-              - "logs:CreateLogGroup"
-              - "logs:CreateLogStream"
-              - "logs:PutLogEvents"
-              - "logs:DescribeLogGroups"
-              - "logs:DescribeLogStreams"
-            Resource: !GetAtt "MyVPCLogGroup.Arn"
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: !Join 
+            - ""
+            - - !Ref "VPCName"
+              - "-flow-log-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "logs:DescribeLogGroups"
+                  - "logs:DescribeLogStreams"
+                Resource: !GetAtt "MyVPCLogGroup.Arn"
       Tags:
         - 
           Key: "Owner"
@@ -152,6 +153,7 @@ Resources:
       DeliverLogsPermissionArn: !GetAtt "MyVPCFlowLogRole.Arn"
       LogGroupName: !Ref "MyVPCLogGroup"
       ResourceId: !Ref "VPC"
+      ResourceType: "VPC"
       TrafficType: "ALL"
   
   PublicSubnet1:
@@ -187,7 +189,6 @@ Resources:
 
   PublicSubnet2:
     Type: "AWS::EC2::Subnet"
-    Condition: "IsMultiZone"
     Properties:
       VpcId: !Ref "VPC"
       AvailabilityZone: !Join
@@ -243,7 +244,6 @@ Resources:
   
   PrivateSubnet2:
     Type: "AWS::EC2::Subnet"
-    Condition: "IsMultiZone"
     Properties:
       VpcId: !Ref "VPC"
       AvailabilityZone: !Join
@@ -472,7 +472,7 @@ Resources:
 
 
   PrivateRouteTable1:
-    Type: "AWS::EC2::Route"
+    Type: "AWS::EC2::RouteTable"
     Properties:
       VpcId: !Ref "VPC"
       Tags:
@@ -501,8 +501,7 @@ Resources:
 
 
   PrivateRouteTable2:
-    Type: "AWS::EC2::Route"
-    Condition: "IsMultiZone"
+    Type: "AWS::EC2::RouteTable"
     Properties:
       VpcId: !Ref "VPC"
       Tags:
@@ -542,17 +541,15 @@ Resources:
 
   PrivateSubnetRouteTableAsso2:
     Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Condition: "IsMultiZone"
     Properties:
       SubnetId: !Ref "PrivateSubnet2"
       RouteTableId: !Ref "PrivateRouteTable2"
 
 Outputs:
 
-  VPCId:
-    Description: "VPCId"
+  VPC:
+    Description: "VPC"
     Value: !Ref "VPC"
-  
   
   PublicSubnet1:
     Description: "Public Subnet 1"
@@ -565,7 +562,6 @@ Outputs:
 
   PublicSubnet2:
     Description: "Public Subnet 2"
-    Condition: "IsMultiZone"
     Value: !Ref "PublicSubnet2"
 
   PrivateSubnet1:
@@ -574,7 +570,6 @@ Outputs:
 
   PrivateSubnet2:
     Description: "Private Subnet 2"
-    Condition: "IsMultiZone"
     Value: !Ref "PrivateSubnet2"
     Export:
       Name: !Join
@@ -587,17 +582,11 @@ Outputs:
     Value: !Join 
       - ","
       - - !Ref PublicSubnet1
-        - !If 
-          - "IsMultiZone"
-          - !Ref PublicSubnet2
-          - "AWS::NoValue"
+        - !Ref PublicSubnet2
 
   PrivateSubnets:
     Description: "List of private subnets"
     Value: !Join 
       - ","
       - - !Ref PrivateSubnet1
-        - !If
-          - "IsMultiZone"
-          - !Ref PrivateSubnet2
-          - "AWS::NoValue"
+        - !Ref PrivateSubnet2
