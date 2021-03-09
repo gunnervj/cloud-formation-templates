@@ -1,7 +1,7 @@
 The project has CloudFormation templates that creates nested stacks for creating :
 
     1. A VPC with 2 Public and 2 Private Subnets.
-      1.1. Will create a NAT gateway in both public subnets for QA and Production environment for high availability.
+      1.1. Will create a NAT gateway in both public subnets for QA and Production environment for HA.
       1.2. For Development environment, only one NAT Gateway will be created to keep the cost down.
       1.3. Private Subnets has route to NAT Gateways internet connectivity.
     2. An Application Load Balancer
