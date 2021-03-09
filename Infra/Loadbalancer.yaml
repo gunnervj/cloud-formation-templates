@@ -1,4 +1,6 @@
+
 AWSTemplateFormatVersion: "2010-09-09"
+
 
 Description: Created ALBs in both public subnets together with autoscaling groups of webservers with cross zone loadbalancing enabled.
 
@@ -24,8 +26,6 @@ Resources:
             Name: !Join
                 - ""
                 - - !Ref "AWS::StackName"
-                  - "-"
-                  - !Ref "Environment"
                   - "-lb"
             Scheme: "internet-facing"
             SecurityGroups:
@@ -83,7 +83,7 @@ Resources:
                         - - !Ref "AWS::StackName"
                           - "-" 
                           - !Ref "Environment"
-                          - "-default-tg"
+                          - "-default-sg"
 
     MyALBHttpListener:
         Type: "AWS::ElasticLoadBalancingV2::Listener"
@@ -93,18 +93,17 @@ Resources:
             Protocol: "HTTP"
             DefaultActions:
                 - Type: "forward"
-                - TargetGroupArn: !Ref DefaultTargetGroup
+                  TargetGroupArn: !Ref DefaultTargetGroup
     
     DefaultTargetGroup:
         Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
         Properties:
             Name: !Join
                 - ""
-                - - !Ref "AWS::StackName"
-                  - "-"
-                  - !GetAtt "MyALoadBalancer.LoadBalancerName"
-                  - "-default-tg"
+                - - !GetAtt "MyALoadBalancer.LoadBalancerName"
+                  - "-def-tg"
             Protocol: "HTTP"
+            VpcId: !Ref "VPC"
             Port: 80
             Tags:
                 - 
@@ -120,10 +119,8 @@ Resources:
                     Key: "Name"
                     Value: !Join
                         - ""
-                        - - !Ref "AWS::StackName"
-                          - "-"
-                          - !GetAtt "MyALoadBalancer.LoadBalancerName"
-                          - "-default-tg"
+                        - - !GetAtt "MyALoadBalancer.LoadBalancerName"
+                          - "-def-tg"
 
 
 Outputs:
@@ -134,3 +131,8 @@ Outputs:
     MyALBHttpListerner:
         Description: "My application loadbalancer http listener"
         Value: !Ref "MyALBHttpListener"
+    
+    MyALBSecurityGroup:
+        Description: "My application loadbalance security group."
+        Value: !Ref "MyALBSecurityGroup"
+
