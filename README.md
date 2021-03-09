@@ -1,3 +1,5 @@
+# CLOUD FORMATION TEMPLATE - INFRA STRUCTURE AS CODE
+
 The project has CloudFormation templates that creates nested stacks for creating :
 
     1. A VPC with 2 Public and 2 Private Subnets.
@@ -15,7 +17,7 @@ The project has CloudFormation templates that creates nested stacks for creating
 
 ## Architecture
 
- ![Architecture](/master.yaml)
+ ![Architecture](architecture.png)
 
 ## Running Using UI
 
