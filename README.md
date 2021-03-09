@@ -15,7 +15,7 @@ The project has CloudFormation templates that creates nested stacks for creating
 
 ## Architecture
 
- ![Architecture](/master.yaml)
+ ![Architecture](architecture.png)
 
 ## Running Using UI
 
