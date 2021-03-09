@@ -25,7 +25,7 @@ Resources:
         Properties:
             Name: !Join
                 - ""
-                - - !Ref "AWS::StackName"
+                - - !Ref "VPC"
                   - "-lb"
             Scheme: "internet-facing"
             SecurityGroups:

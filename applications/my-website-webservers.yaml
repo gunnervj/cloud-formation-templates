@@ -1,0 +1,256 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+
+Description : "This will deploy webservers into public subnets via an autoscaling target group for my awesome website"
+
+#References
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-as-policy.html#aws-properties-as-policy--examples
+# https://aws.amazon.com/blogs/compute/query-for-the-latest-amazon-linux-ami-ids-using-aws-systems-manager-parameter-store/
+
+Parameters:
+
+    Owner:
+        Description: "Owner of Resources"
+        Type: String
+        Default: "thebitbytebox"
+
+    ALBListener:
+        Type: String
+        Description: "ALB listerner to which we can attach"
+    
+    VPC:
+        Type: "AWS::EC2::VPC::Id"
+        Description: "Choose which VPC to which resources should be created"
+
+    InstanceType:
+        Type: String
+        Default: "t2.micro"
+        AllowedValues:
+            - "t1.micro"
+            - "t2.micro"
+            - "t2.small"
+        ConstraintDescription: "Select a valid instance type."
+    
+    # https://aws.amazon.com/blogs/compute/query-for-the-latest-amazon-linux-ami-ids-using-aws-systems-manager-parameter-store/
+    LatestAMIId:
+        Type: "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+        Default: "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+
+    MinCapacity:
+        Description : "Minimum number of instance you want to run in ASG"
+        Type: Number
+        Default: 1
+        ConstraintDescription: "Minimum number of instance you want to run in ASG"
+        MinValue: 1
+        MaxValue: 3
+    
+    MaxCapacity:
+        Description : "Maximum number of instance you want to run in ASG"
+        Type: Number
+        Default: 3
+        ConstraintDescription: "Maximum number of instance you want to run in ASG"
+        MinValue: 1
+        MaxValue: 10   
+    
+    DesiredCapacity:
+        Description : "Desired number of instance you want to run in ASG"
+        Type: Number
+        Default: 2
+        ConstraintDescription: "Desired number of instance you want to run in ASG"
+        MinValue: 1
+        MaxValue: 10
+
+    Environment:
+        Description: "Environment for the website"
+        Type: String
+        Default: "Development"
+        ConstraintDescription: "Environment can be [Development, QA, Production]"
+        AllowedValues:
+            - "Development"
+            - "QA"
+            - "Production"
+    
+    Subnets:
+        Description: "Subnets to which the asg should instances"
+        Type: List<AWS::EC2::Subnet::Id>
+    
+    MyALBSecurityGroup:
+        Description: "This is the scecurity group of the ALB that you want to have your traffic directed to ASG instances."
+        Type: "AWS::EC2::SecurityGroup::Id"
+
+    CPUPolicyTargetValue:
+        Description: Average CPU utilization for ASG scaling policy
+        Type: Number
+        Default: 80
+        MinValue: 50
+        MaxValue: 95
+
+    WebserverLaunchTemplateVersion:
+        Description: "Version for the launch template"
+        Default: "1"
+        Type: String
+        
+
+Mappings:
+    MyWebSite:
+        Props:
+          Name: "my-awesome-website"
+        Path:
+          Value: "/"
+            
+
+
+# Resource Creation
+Resources:
+
+    MyWebServerSecurityGroup:
+        Type: "AWS::EC2::SecurityGroup"
+        Properties:
+            VpcId: !Ref "VPC"
+            GroupDescription: "Allows http connection from the loadbalancer group."
+            GroupName: !Join
+                - ""
+                - - !Ref "AWS::StackName"
+                  - "webserver-sg"
+            SecurityGroupIngress:
+                - SourceSecurityGroupId: !Ref "MyALBSecurityGroup"
+                  IpProtocol: "tcp"
+                  FromPort: 80
+                  ToPort: 80
+
+    WebserverLaunchTemplate:
+        Type: "AWS::EC2::LaunchTemplate"
+        Properties:
+            LaunchTemplateData:
+                ImageId: !Ref "LatestAMIId"
+                InstanceType: !Ref "InstanceType"
+                SecurityGroupIds: 
+                    - !Ref "MyWebServerSecurityGroup"
+                UserData:
+                    "Fn::Base64": !Sub |
+                            #!/bin/bash -xe
+                            yum update -y aws-cfn-bootstrap
+                            # start cfn-init
+                            /opt/aws/bin/cfn-init -s ${AWS::StackId} -r WebserverLaunchTemplate --region ${AWS::Region} || error_exit "Failed to run cfn-init"
+                            # start up the cfn-hup daemon to listen for changes to the EC2 instance metadata
+                            /opt/aws/bin/cfn-hup || error_exit "Failed to start cfn-hup"
+                            # All done so signal success
+                            /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackId} --resource WebServerAutoScalingGroup
+        Metadata:
+            AWS::CloudFormation::Init:
+                config:
+                    packages: 
+                        yum:
+                            httpd: []
+                    files:
+                        "/var/www/html/index.html":
+                            content: "<h1> Welcome to my Awesome Website. Currently service Page from ${hostname -f)</h1>"
+                    services:
+                        sysvinit:
+                            httpd:
+                                enabled: "true"
+                                ensureRunning: "true"
+
+
+
+    WebServerAutoScalingGroup:
+        Type: "AWS::AutoScaling::AutoScalingGroup"
+        CreationPolicy:
+          ResourceSignal:
+            Timeout: "PT15M"
+        Properties:
+            AutoScalingGroupName: !Join
+                - ""
+                - - !FindInMap ["MyWebSite", "Props", "Name"]
+                  - "-"
+                  - !Ref "Environment"
+                  - "-my-website-webserver-asg"
+            VPCZoneIdentifier: !Ref "Subnets"
+            MinSize: !Ref "MinCapacity"
+            MaxSize: !Ref "MaxCapacity"
+            DesiredCapacity: !Ref "DesiredCapacity"
+            LaunchTemplate: 
+                LaunchTemplateId: !Ref "WebserverLaunchTemplate"
+                Version: !Ref "WebserverLaunchTemplateVersion"
+            TargetGroupARNs:
+                - !Ref "WebsiteTargetGroup"
+            Tags:
+                - 
+                    Key: "Owner"
+                    Value: !Ref "Owner"
+                    PropagateAtLaunch: true
+                - 
+                    Key: "Application"
+                    Value: !Ref "AWS::StackName"
+                    PropagateAtLaunch: true
+                - 
+                    Key: "Environment"
+                    Value: !Ref "Environment"
+                    PropagateAtLaunch: true
+                -
+                    Key: "Name"
+                    PropagateAtLaunch: false
+                    Value: !Join
+                        - ""
+                        - - !Ref "AWS::StackName"
+                          - "-"
+                          - !FindInMap ["MyWebSite", "Props", "Name"]
+                          - "-asg"
+
+
+    WebServerCpuUsagePolicy:
+        Type: "AWS::AutoScaling::ScalingPolicy"
+        Properties:
+            AutoScalingGroupName: !Ref "WebServerAutoScalingGroup"
+            PolicyType: "TargetTrackingScaling"
+            TargetTrackingConfiguration:
+                PredefinedMetricSpecification:
+                    PredefinedMetricType: "ASGAverageCPUUtilization"
+                TargetValue: !Ref "CPUPolicyTargetValue"
+
+
+    WebsiteTargetGroup:
+        Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+        Properties:
+            Name: !Join
+                - ""
+                - - !Ref "Environment"
+                  - "-mywebsite-tg"
+            Protocol: "HTTP"
+            VpcId: !Ref "VPC"
+            HealthCheckPath: "/"
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 5
+            HealthyThresholdCount: 2
+            Port: 80
+            Tags:
+                - 
+                    Key: "Owner"
+                    Value: !Ref Owner
+                - 
+                    Key: "Application"
+                    Value: !Ref "AWS::StackName"
+                - 
+                    Key: "Environment"
+                    Value: !Ref "Environment"
+                -
+                    Key: "Name"
+                    Value: !Join
+                        - ""
+                        - - !Ref "AWS::StackName"
+                          - "-"
+                          - !FindInMap ["MyWebSite", "Props", "Name"]
+                          - "-tg"
+
+    ALBListernerRule:
+        Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+        Properties:
+            ListenerArn: !Ref "ALBListener"
+            Priority: 1
+            Conditions:
+                - Field: "path-pattern"
+                  Values:
+                    - !FindInMap ["MyWebSite", "Path", "Value"]
+            Actions:
+                - TargetGroupArn: !Ref "WebsiteTargetGroup"
+                  Type: "forward"

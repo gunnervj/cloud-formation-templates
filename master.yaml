@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: | 
+    This is the master template to create our resources stacksets.
+    Stacksets that will be created are:
+    1) It Creates a VPC with 2 Public and 2 Private Subnets. 
+    2) An application loadbalancer
+    3) A website application with EC2 autoscaling
+
+Parameters:
+
+  Environment:
+    Description: "Which environment the VPC is created for."
+    Type: String
+    Default: "Development"
+    ConstraintDescription: "Environment can be [Development, QA, Production]"
+    AllowedValues:
+        - "Development"
+        - "QA"
+        - "Production"
+  Owner:
+    Description: "Owner of VPC"
+    Type: String
+    Default: "thebitbytebox"
+
+  Region:
+    Description: "Region where VPC needs to be created"
+    Type: String
+    Default : "ap-south-1"
+    AllowedValues:
+      - ap-south-1
+      - us-east-1
+
+  VPCName:
+    Description: "Name for VPC that is being created"
+    Type: String
+    Default: "thebitbyteboxVPC"
+
+  VPCFLowLogRetentionDays:
+    Description: "How many days VPC Flow Logs should be retained?"
+    Type: Number
+    Default: 90
+    MinValue: 30 
+    ConstraintDescription: "Minimum log retention days is 30. If you leave it blank, logs will be retianed for 90 days."
+
+  InstanceType:
+    Type: String
+    Default: "t2.micro"
+    AllowedValues:
+        - "t1.micro"
+        - "t2.micro"
+        - "t2.small"
+    ConstraintDescription: "Select a valid instance type."
+
+  MinCapacity:
+    Description : "Minimum number of instance you want to run in ASG"
+    Type: Number
+    Default: 1
+    ConstraintDescription: "Minimum number of instance you want to run in ASG"
+    MinValue: 1
+    MaxValue: 3
+    
+  MaxCapacity:
+    Description : "Maximum number of instance you want to run in ASG"
+    Type: Number
+    Default: 3
+    ConstraintDescription: "Maximum number of instance you want to run in ASG"
+    MinValue: 1
+    MaxValue: 10   
+
+  DesiredCapacity:
+    Description : "Desired number of instance you want to run in ASG"
+    Type: Number
+    Default: 2
+    ConstraintDescription: "Desired number of instance you want to run in ASG"
+    MinValue: 1
+    MaxValue: 10
+
+  CPUPolicyTargetValue:
+    Description: Average CPU utilization for ASG scaling policy
+    Type: Number
+    Default: 80
+    MinValue: 50
+    MaxValue: 95
+
+Metadata:
+   AWS::CloudFormation::Interface:
+      ParameterGroups:
+        - Label:
+            default: "VPC Configuration"
+          Parameters:
+            - "VPCName"
+            - "VPCFLowLogRetentionDays"
+        - Label:
+            default: "Common Configuration"
+          Parameters:
+            - "Environment"
+            - "Owner"
+            - "Region"
+        - Label:
+            default: "WebServer Configuration"
+          Parameters:
+            - "InstanceType"
+            - "MinCapacity"
+            - "MaxCapacity"
+            - "DesiredCapacity"
+            - "CPUPolicyTargetValue"
+      ParameterLabels:
+        VPCName:
+           default: "What should be the name of the VPC?"
+        VPCFLowLogRetentionDays: 
+           default: "For how many days VPC flow logs should be retained?"
+        Environment:
+           default: "For which environment this VPC is being created for?"
+        Owner:
+           default: "Who will be the owner of VPC and its components?"
+        Region:
+           default: "Which region should be create the VPC and resources?"
+        InstanceType: 
+           default: "What instance type you prefer for web servers?"
+        MinCapacity:
+           default: "What is the minimum number of webservers that we need to have?"
+        MaxCapacity:
+           default: "What is the maximum number of webservers that we need to have?"
+        DesirecCapacity:
+           default: "What is the desired number of webservers that we need to have?"
+        CPUPolicyTargetValue:
+           default: "At what CPU usage should be scale up the servers?"
+
+Resources:
+  VPC:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: "https://vj-awesomewebsite-tmplate.s3.ap-south-1.amazonaws.com/Infra/VPC.yaml"
+      Parameters:
+        VPCName: !Ref "VPCName"
+        Region: !Ref "Region"
+        Owner: !Ref "Owner"
+        VPCFLowLogRetentionDays: !Ref "VPCFLowLogRetentionDays"
+        Environment: !Ref "Environment"
+    
+  ApplicationLoadBalancer:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: "https://vj-awesomewebsite-tmplate.s3.ap-south-1.amazonaws.com/Infra/Loadbalancer.yaml"
+      Parameters: 
+        Environment: !Ref "Environment"
+        VPC: !GetAtt "VPC.Outputs.VPC"
+        Subnets: !GetAtt "VPC.Outputs.PublicSubnets"
+        Owner: !Ref "Owner"
+
+  MyAwesomeWebsite:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: "https://vj-awesomewebsite-tmplate.s3.ap-south-1.amazonaws.com/applications/my-website-webservers.yaml"
+      Parameters:
+        Owner: !Ref "Owner"
+        ALBListener: !GetAtt "ApplicationLoadBalancer.Outputs.MyALBHttpListerner"
+        VPC: !GetAtt "VPC.Outputs.VPC"
+        InstanceType: !Ref "InstanceType"
+        MinCapacity: !Ref "MinCapacity"
+        MaxCapacity: !Ref "MaxCapacity"
+        DesiredCapacity: !Ref "DesiredCapacity"
+        Environment: !Ref "Environment"
+        Subnets: !GetAtt "VPC.Outputs.PublicSubnets"
+        MyALBSecurityGroup: !GetAtt "ApplicationLoadBalancer.Outputs.MyALBSecurityGroup"
+        CPUPolicyTargetValue: !Ref "CPUPolicyTargetValue"
+        WebserverLaunchTemplateVersion: "1"
