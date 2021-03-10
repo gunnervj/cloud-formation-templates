@@ -157,7 +157,7 @@ Resources:
         Type: "AWS::AutoScaling::AutoScalingGroup"
         CreationPolicy:
           ResourceSignal:
-            Timeout: "PT15M"
+            Timeout: "PT8M"
         Properties:
             AutoScalingGroupName: !Join
                 - ""

@@ -174,7 +174,7 @@ Resources:
         MaxCapacity: !Ref "MaxCapacity"
         DesiredCapacity: !Ref "DesiredCapacity"
         Environment: !Ref "Environment"
-        Subnets: !GetAtt "VPC.Outputs.PublicSubnets"
+        Subnets: !GetAtt "VPC.Outputs.PrivateSubnets"
         MyALBSecurityGroup: !GetAtt "ApplicationLoadBalancer.Outputs.MyALBSecurityGroup"
         CPUPolicyTargetValue: !Ref "CPUPolicyTargetValue"
         WebserverLaunchTemplateVersion: "1"
