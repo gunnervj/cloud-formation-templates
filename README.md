@@ -22,7 +22,7 @@ The project has CloudFormation templates that creates nested stacks for creating
 
 ## Architecture
 
- ![Architecture](architecture.png)
+ ![Architecture](architecture_diagram.png)
 
 ## Deploy Using UI
 
