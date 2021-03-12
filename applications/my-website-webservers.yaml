@@ -132,8 +132,6 @@ Resources:
                             yum update -y aws-cfn-bootstrap
                             # start cfn-init
                             /opt/aws/bin/cfn-init -s ${AWS::StackId} -r WebserverLaunchTemplate --region ${AWS::Region} || error_exit "Failed to run cfn-init"
-                            # start up the cfn-hup daemon to listen for changes to the EC2 instance metadata
-                            /opt/aws/bin/cfn-hup || error_exit "Failed to start cfn-hup"
                             # All done so signal success
                             /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackId} --resource WebServerAutoScalingGroup
         Metadata:
